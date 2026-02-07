@@ -16,25 +16,74 @@ RUN mkdir -p /tmp/empty
 
 # Create config files with empty JSON content
 RUN mkdir -p /tmp/usr/local/etc/xray
-RUN cat <<EOF >/tmp/usr/local/etc/xray/00_log.json
+RUN cat <<EOF >/tmp/usr/local/etc/xray/config.json
 {
   "log": {
     "error": "/var/log/xray/error.log",
     "loglevel": "warning",
     "access": "none",
     "dnsLog": false
-  }
+  },
+  "dns": {
+    "servers": [
+      "https+local://1.1.1.1/dns-query"
+    ]
+  },
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "ip": [
+          "geoip:private"
+        ],
+        "outboundTag": "block"
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "vless-in",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "c3ccc4c3-152b-4c01-a113-415b5e33147d",
+            "flow": "xtls-rprx-vision",
+            "level": 0,
+            "email": "c3ccc4c3"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "alpn": "http/1.1",
+          "certificates": [
+            {
+              "certificateFile": "/usr/local/etc/xray/fullchain.pem",
+              "keyFile": "/usr/local/etc/xray/cert.key"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "domainStrategy":"PreferIPv6"
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ]
 }
 EOF
-RUN echo '{}' >/tmp/usr/local/etc/xray/01_api.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/02_dns.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/03_routing.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/04_policy.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/05_inbounds.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/06_outbounds.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/07_transport.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/08_stats.json
-RUN echo '{}' >/tmp/usr/local/etc/xray/09_reverse.json
 
 # Create log files
 RUN mkdir -p /tmp/var/log/xray && touch \
@@ -52,8 +101,6 @@ COPY --from=build --chown=0:0 --chmod=644 /tmp/usr/local/etc/xray/*.json /usr/lo
 COPY --from=build --chown=0:0 --chmod=755 /tmp/empty /var/log/xray
 COPY --from=build --chown=65532:65532 --chmod=600 /tmp/var/log/xray/*.log /var/log/xray/
 
-VOLUME /usr/local/etc/xray
-VOLUME /var/log/xray
 
 ARG TZ=Etc/UTC
 ENV TZ=$TZ
